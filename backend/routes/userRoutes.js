@@ -1,38 +1,68 @@
-const router = require("express").Router();
-const bcrypt = require("bcryptjs");
+const express = require("express");
+const router = express.Router();
+
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
-const auth = require("../middleware/auth");
 
-router.post("/", async (req, res) => {
-  const hashed = await bcrypt.hash(req.body.password, 10);
-  const user = new User({ username: req.body.username, password: hashed });
-  await user.save();
-  res.send("User created");
-});
-
+/**
+ * POST /users/login
+ */
 router.post("/login", async (req, res) => {
-  const user = await User.findOne({ username: req.body.username });
-  if (!user) return res.status(400).send("Invalid username/password");
+  try {
+    const { email, password } = req.body;
 
-  if (user.token) {
-    return res.status(403).send("You are already logged in on another device.");
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ message: "User not found" });
+    }
+
+    if (user.password !== password) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
+
+    // Single-device rule
+    if (user.token) {
+      return res.status(400).json({ message: "Already logged in" });
+    }
+
+    const token = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+
+    user.token = token;
+    await user.save();
+
+    res.json({ token });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
-
-  const valid = await bcrypt.compare(req.body.password, user.password);
-  if (!valid) return res.status(400).send("Invalid username/password");
-
-  const token = jwt.sign({ _id: user._id }, process.env.JWT_SECRET);
-  user.token = token;
-  await user.save();
-
-  res.send({ token });
 });
 
-router.post("/logout", auth, async (req, res) => {
-  req.user.token = null;
-  await req.user.save();
-  res.send("Logged out");
+/**
+ * POST /users/logout
+ */
+router.post("/logout", async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ message: "No token provided" });
+    }
+
+    const user = await User.findOne({ token });
+    if (!user) {
+      return res.status(401).json({ message: "Invalid token" });
+    }
+
+    user.token = null;
+    await user.save();
+
+    res.json({ message: "Logged out successfully" });
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
 });
 
-module.exports = router;
+module.exports = router; 

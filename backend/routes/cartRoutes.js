@@ -1,23 +1,31 @@
-const router = require("express").Router();
+const express = require("express");
+const router = express.Router();
+
 const Cart = require("../models/Cart");
 const auth = require("../middleware/auth");
 
 router.post("/", auth, async (req, res) => {
-  let cart = await Cart.findOne({ userId: req.user._id });
+  try {
+    const { itemId, quantity } = req.body;
 
-  if (!cart) {
-    cart = new Cart({ userId: req.user._id, items: [] });
+    let cart = await Cart.findOne({ userId: req.userId });
+
+    if (!cart) {
+      cart = new Cart({
+        userId: req.userId,
+        items: [{ itemId, quantity }]
+      });
+      await cart.save();
+      return res.status(201).json(cart);
+    }
+
+    cart.items.push({ itemId, quantity });
+    await cart.save();
+
+    res.status(200).json(cart);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
-
-  cart.items.push(req.body.itemId);
-  await cart.save();
-
-  res.send(cart);
 });
 
-router.get("/", auth, async (req, res) => {
-  const cart = await Cart.findOne({ userId: req.user._id });
-  res.send(cart);
-});
-
-module.exports = router;
+module.exports = router;  
