@@ -10,8 +10,14 @@ const orderRoutes = require("./routes/orderRoutes");
 const app = express();
 app.use(express.json());
 
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB connected"));
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB connected"))
+  .catch((err) => {
+    console.error("Mongo connection failed:", err.message);
+    process.exit(1); // prevents silent crashes
+  });
+
 
 app.use("/users", userRoutes);
 app.use("/items", itemRoutes);
